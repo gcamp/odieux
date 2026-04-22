@@ -1,8 +1,8 @@
-# Ohdieux
+# rss-converter
 
 Converts RSS feeds for podcast clients.
 
-Built with Scala 3, Play Framework, and Pekko typed actors. Optional media archival to local disk.
+Built with Scala 3, Play Framework, and Pekko typed actors.
 
 ## Stack
 
