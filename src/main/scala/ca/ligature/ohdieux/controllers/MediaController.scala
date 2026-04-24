@@ -73,7 +73,8 @@ class MediaController @Inject() (
               java.net.http.HttpResponse.BodyHandlers.ofInputStream()
             )
             val source = StreamConverters.fromInputStream(() => response.body())
-            Ok.streamed(source, contentLength = None, contentType = Some("audio/mpeg"))
+            val contentLength = response.headers().firstValueAsLong("Content-Length")
+            Ok.streamed(source, contentLength = if (contentLength.isPresent) Some(contentLength.getAsLong) else None, contentType = Some("audio/mpeg"))
           case None =>
             NotFound("unknown media")
         }
