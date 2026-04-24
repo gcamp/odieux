@@ -31,7 +31,9 @@ class MediaController @Inject() (
     extends BaseController {
 
   private val userAgent: String = configuration.get[String]("rc.user_agent")
-  private val httpClient = java.net.http.HttpClient.newHttpClient()
+  private val httpClient = java.net.http.HttpClient.newBuilder()
+    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+    .build()
 
   def getImage(programme_id: Int) = Action {
     val imageHandle = archive.createImageHandle(programme_id)
