@@ -6,13 +6,11 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import ca.ligature.ohdieux.utils.|>
 import ca.ligature.ohdieux.persistence.ProgrammeManifestEpisode
-import ca.ligature.ohdieux.actors.file.impl.ArchivedFileRepository
 import CleanTextUtils._
 
 case class ManifestRenderer(
     userOptions: ManifestRenderUserOptions,
-    serverOptions: ManifestRenderServerOptions,
-    archive: ArchivedFileRepository
+    serverOptions: ManifestRenderServerOptions
 ) {
 
   def render(programme: ProgrammeManifestView): RenderedProgrammeManifest = {
@@ -52,11 +50,9 @@ case class ManifestRenderer(
         duration = e.duration,
         isBroadcastReplay = if (e.isBroadcastReplay > 0) then true else false,
         mediaId = m.mediaId,
-        mediaUrl = m.upstreamUrl,
-        mediaType = m.mediaType
+        mediaUrl = s"${serverOptions.mediaArchiveBaseUrl}${m.mediaId}.m4a",
+        mediaType = "audio/mpeg"
       )
-        |> applyServeMediaOption
-        |> applyFavorAacOption
     )
   }
 
@@ -103,33 +99,6 @@ case class ManifestRenderer(
           s"${serverOptions.imageArchiveBaseUrl}${programme.programmeId}"
         )
     )
-
-  private def applyServeMediaOption =
-    renderOption(serverOptions.serveArchivedMedia)(
-      (episode: RenderedManifestEpisode) =>
-        if (archive.exists(archive.createMediaHandle(episode.mediaId))) {
-          episode.copy(
-            mediaUrl =
-              s"${serverOptions.mediaArchiveBaseUrl}${episode.mediaId}.m4a",
-            mediaType = "audio/mpeg"
-          )
-        } else {
-          episode
-        }
-    )
-
-  private def applyFavorAacOption =
-    renderOption(userOptions.favor_aac)((episode: RenderedManifestEpisode) => {
-      // blindly replace .mp4 urls with .aac, assuming it exists.
-      // This is deprecated, as it does not work reliably for all programmes.
-      if (""".*/mp4/.*\.mp4$""".r.matches(episode.mediaUrl)) {
-        episode.copy(mediaUrl =
-          episode.mediaUrl.replace("/mp4/", "/hls/").replace(".mp4", ".aac")
-        )
-      } else {
-        episode
-      }
-    })
 
   private def renderOption[T](
       toggle: Boolean

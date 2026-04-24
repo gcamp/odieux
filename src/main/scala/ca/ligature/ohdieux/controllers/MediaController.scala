@@ -11,20 +11,27 @@ import play.api.mvc.{
   Result
 }
 import ca.ligature.ohdieux.actors.file.impl.ArchivedFileRepository
+import ca.ligature.ohdieux.persistence.MediaRepository
+import play.api.Configuration
 
 import java.io.File
 import scala.concurrent.ExecutionContext
 import java.nio.file.Files
-import org.apache.pekko.stream.scaladsl.FileIO
+import org.apache.pekko.stream.scaladsl.{FileIO, StreamConverters}
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.util.ByteString
 import play.api.http.HttpEntity
 
 class MediaController @Inject() (
     archive: ArchivedFileRepository,
+    mediaRepository: MediaRepository,
+    configuration: Configuration,
     val controllerComponents: ControllerComponents
 )(implicit ec: ExecutionContext)
     extends BaseController {
+
+  private val userAgent: String = configuration.get[String]("rc.user_agent")
+  private val httpClient = java.net.http.HttpClient.newHttpClient()
 
   def getImage(programme_id: Int) = Action {
     val imageHandle = archive.createImageHandle(programme_id)
@@ -40,22 +47,35 @@ class MediaController @Inject() (
 
   def getMedia(media_id: Int) = Action {
     implicit request: Request[AnyContent] =>
-      {
-        val mediaHandle = archive.createMediaHandle(media_id)
-        if (!archive.exists(mediaHandle)) {
-          NotFound("not cached")
-        } else {
-          val path = archive.getPath(mediaHandle)
-          val source: Source[ByteString, ?] = FileIO.fromPath(path)
-          val contentLength = Some(Files.size(path))
+      val mediaHandle = archive.createMediaHandle(media_id)
+      if (archive.exists(mediaHandle)) {
+        val path = archive.getPath(mediaHandle)
+        val source: Source[ByteString, ?] = FileIO.fromPath(path)
+        val contentLength = Some(Files.size(path))
 
-          RangeResult.ofSource(
-            entityLength = contentLength,
-            source = source,
-            rangeHeader = request.headers.get(RANGE),
-            fileName = Some(s"${media_id}.m4a"),
-            contentType = Some("audio/mpeg")
-          )
+        RangeResult.ofSource(
+          entityLength = contentLength,
+          source = source,
+          rangeHeader = request.headers.get(RANGE),
+          fileName = Some(s"${media_id}.m4a"),
+          contentType = Some("audio/mpeg")
+        )
+      } else {
+        mediaRepository.getById(media_id) match {
+          case Some(media) =>
+            val httpRequest = java.net.http.HttpRequest
+              .newBuilder()
+              .uri(java.net.URI.create(media.upstream_url))
+              .header("User-Agent", userAgent)
+              .build()
+            val response = httpClient.send(
+              httpRequest,
+              java.net.http.HttpResponse.BodyHandlers.ofInputStream()
+            )
+            val source = StreamConverters.fromInputStream(() => response.body())
+            Ok.streamed(source, contentLength = None, contentType = Some("audio/mpeg"))
+          case None =>
+            NotFound("unknown media")
         }
       }
   }
