@@ -68,7 +68,7 @@ Environment variables are defined and used in [application.conf](/src/main/resou
 | PORT                        | Listening port                                                                    | 9000                                |
 | HTTP_ADDRESS                | Binding address                                                                   | 0.0.0.0                             |
 | DATA_DIR                    | Global default data directory.                                                    | `./` locally, `/data/` in docker.   |
-| PUBLIC_URL                  | Public-facing base URL. (**Required if using archive**)                           | `unset`, e.g. `https://example.com` |
+| PUBLIC_URL                  | Public-facing base URL. (**Required**)                                            | `unset`, e.g. `https://example.com` |
 | JDBC_DRIVER                 | Database driver class-name. Currently, only `org.sqlite.JDBC` is supported.       | `org.sqlite.JDBC`                   |
 | JDBC_URL                    | Database connection string (JDBC format)                                          | `jdbc:sqlite:${DATA_DIR}ohdieux.db` |
 | JDBC_USERNAME               | Database username (if required)                                                   | `unset`                             |
@@ -83,7 +83,7 @@ Environment variables are defined and used in [application.conf](/src/main/resou
 | SCRAPER_MAX_EPISODES        | Max number of episodes to scrape per programme.                                   | `500`                               |
 | SCRAPER_AUTO_ADD_PROGRAMME  | Whether to automatically start tracking every queried programme (true/false).     | `true`                              |
 | MANIFEST_SERVE_IMAGES       | Whether to serve manifest images from local archive or upstream CDN. (true/false) | `false`                             |
-| MANIFEST_SERVE_MEDIA        | Whether to serve audio files from archive instead of upstream CDN. (true/false)   | `false`                             |
+| MANIFEST_SERVE_MEDIA        | Deprecated. Media is always proxied through the server.                           | `false`                             |
 | MANIFEST_IMAGE_BASE_URL     | Override image archive public URL. (Advanced deployments only.)                   | `${PUBLIC_URL}/media/image/`        |
 | MANIFEST_AUDIO_BASE_URL     | Override audio archive public URL. (Advanced deployments only.)                   | `${PUBLIC_URL}/media/audio/`        |
 

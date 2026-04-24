@@ -51,6 +51,7 @@ flowchart LR
     AC --> ASA
     AC --> PCA
     MedC --> FS
+    MedC -->|proxy| RC
 
     PSA -- timer: refresh all --> PSA
     PSA -->|fetch programmes/episodes| RC
@@ -69,5 +70,5 @@ flowchart LR
     PCA --> DB
 ```
 
-Flow: `ProgrammeScraperActor` polls the upstream API on a timer and hands each discovered episode to `MediaScraperActor`, which resolves the audio URL and (optionally) asks `FileArchiveActor` to download it. `ManifestController` reads the resulting data from SQLite and renders it as an RSS feed through a Twirl XML template.
+Flow: `ProgrammeScraperActor` polls the upstream API on a timer and hands each discovered episode to `MediaScraperActor`, which resolves the audio URL and (optionally) asks `FileArchiveActor` to download it. `ManifestController` reads the resulting data from SQLite and renders it as an RSS feed through a Twirl XML template. Media is always served through `MediaController` — archived files are served directly, otherwise the upstream URL is proxied to ensure podcast clients receive audio content (not upstream `.mp4` video containers).
 

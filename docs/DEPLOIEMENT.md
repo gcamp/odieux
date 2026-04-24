@@ -69,7 +69,7 @@ Les variables d'environnement sont définies dans [application.conf](/src/main/r
 | PORT                        | Port d'écoute                                                                             | 9000                                      |
 | HTTP_ADDRESS                | Address réseau d'écoute                                                                   | 0.0.0.0                                   |
 | DATA_DIR                    | Dossier de base pour les données locales.                                                 | `./` localement, `/data/` dans docker.    |
-| PUBLIC_URL                  | URL publique du serveur. (**Nécéssaire avec fonctionnalité d'archivage**)                 | _non spécifié_, ex. `https://example.com` |
+| PUBLIC_URL                  | URL publique du serveur. (**Requis**)                                                     | _non spécifié_, ex. `https://example.com` |
 | JDBC_DRIVER                 | Pilote de base de données. Pour le moment, seul `org.sqlite.JDBC` est supporté.           | `org.sqlite.JDBC`                         |
 | JDBC_URL                    | Descriptif de connection pour la base de données (format JDBC)                            | `jdbc:sqlite:${DATA_DIR}ohdieux.db`       |
 | JDBC_USERNAME               | Nom d'utilisateur pour la base de données (si requis)                                     | _non spécifié_                            |
@@ -84,7 +84,7 @@ Les variables d'environnement sont définies dans [application.conf](/src/main/r
 | SCRAPER_MAX_EPISODES        | Nombre maximal d'épisodes à sauvegarder (par programme).                                  | `500`                                     |
 | SCRAPER_AUTO_ADD_PROGRAMME  | Activer l'ajout automatique de chaque programme demandé sur la route `/rss` (true/false). | `true`                                    |
 | MANIFEST_SERVE_IMAGES       | Servir les fichiers images depuis l'archive locale. (true/false)                          | `false`                                   |
-| MANIFEST_SERVE_MEDIA        | Servir les fichiers audio depuis l'archive locale. (true/false)                           | `false`                                   |
+| MANIFEST_SERVE_MEDIA        | Déprécié. Les fichiers audio sont toujours servis via le serveur.                         | `false`                                   |
 | MANIFEST_IMAGE_BASE_URL     | Configuration manuelle de l'URL de base pour les images à servir (déploiements avancés)   | `${PUBLIC_URL}/media/image/`              |
 | MANIFEST_AUDIO_BASE_URL     | Configuration manuelle de l'URL de base pour les fichiers audio (déploiement avancés)     | `${PUBLIC_URL}/media/audio/`              |
 
