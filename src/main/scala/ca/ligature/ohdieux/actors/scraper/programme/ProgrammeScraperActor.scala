@@ -95,6 +95,7 @@ class ProgrammeScraperActor(
   }
 
   private def trackFetchFailure(programmeId: Int, message: String): Unit = {
+    context.log.error(s"Failed to fetch programme $programmeId: $message")
     programmeConfigRepository.saveProgrammeConfig(
       ProgrammeConfigEntity(
         programmeId,

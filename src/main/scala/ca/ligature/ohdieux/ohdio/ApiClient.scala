@@ -52,7 +52,27 @@ case class ApiClient(val baseUrl: String, val userAgent: String) {
     val decoded =
       (body \ "data" \ "programmeById").validate[ProgrammeById]
 
-    decoded.map(Success(_)).getOrElse(ParseFailure(_1))
+    decoded
+      .map(Success(_))
+      .getOrElse {
+        val reason = describeFailure(body)
+        logger.error(
+          s"Could not decode programme ${programmeType}/${programmeId} page ${pageNumber}: $reason"
+        )
+        ParseFailure(reason)
+      }
+  }
+
+  private def describeFailure(body: JsValue): String = {
+    val graphqlError = (body \ "errors" \ 0 \ "message").asOpt[String]
+    val pageError = (body \ "data" \ "program" \ "typename")
+      .asOpt[String]
+      .filter(_ == "PageError")
+      .map(_ => "Programme not found (PageError)")
+    graphqlError
+      .map(m => s"API error: $m")
+      .orElse(pageError)
+      .getOrElse("Unexpected programme response format")
   }
 
   def getPlaybacklistById(

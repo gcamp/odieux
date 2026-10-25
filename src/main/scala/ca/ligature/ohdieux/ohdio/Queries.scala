@@ -49,14 +49,17 @@ private object Queries {
       pageNumber: Int
   ): Option[(Map[String, String], JsValue => JsValue)] =
     programmeType match {
-      case ProgrammeType.Balado => {
+      // The site now serves every non-audiobook programme through the single
+      // "program" operation, whose response is adapted to the legacy model.
+      case ProgrammeType.Balado | ProgrammeType.EmissionPremiere |
+          ProgrammeType.GrandeSerie => {
         val extensions = JsObject(
           Seq(
             "persistedQuery" -> JsObject(
               Seq(
                 "version" -> JsNumber(1),
                 "sha256Hash" -> JsString(
-                  "3b505d1f3b3935981802bccab9c9ee63bbf6c5c55a0b996287fb789e1a90e660"
+                  "eb21dbac717c115f509e149e0dd619a678446064059d0a28d536124eb9ce88d1"
                 )
               )
             )
@@ -67,8 +70,7 @@ private object Queries {
           Seq(
             "params" -> JsObject(
               Seq(
-                "context" -> JsString("web"),
-                "forceWithoutCueSheet" -> JsBoolean(true),
+                "device" -> JsString("Web"),
                 "id" -> JsNumber(programmeId),
                 "pageNumber" -> JsNumber(pageNumber)
               )
@@ -78,85 +80,11 @@ private object Queries {
 
         return Some(
           Map(
-            "opname" -> "programmeById",
+            "opname" -> "program",
             "extensions" -> Json.stringify(extensions),
             "variables" -> Json.stringify(variables)
           ),
-          identity
-        )
-      }
-
-      case ProgrammeType.EmissionPremiere => {
-        val extensions = JsObject(
-          Seq(
-            "persistedQuery" -> JsObject(
-              Seq(
-                "version" -> JsNumber(1),
-                "sha256Hash" -> JsString(
-                  "7e961f5b1091589230b1f56ca6be609d26e5c475934235103afb55589a397e0c"
-                )
-              )
-            )
-          )
-        )
-
-        val variables = JsObject(
-          Seq(
-            "params" -> JsObject(
-              Seq(
-                "context" -> JsString("web"),
-                "forceWithoutCueSheet" -> JsBoolean(false),
-                "id" -> JsNumber(programmeId),
-                "pageNumber" -> JsNumber(pageNumber)
-              )
-            )
-          )
-        )
-
-        return Some(
-          Map(
-            "opname" -> "programmeById",
-            "extensions" -> Json.stringify(extensions),
-            "variables" -> Json.stringify(variables)
-          ),
-          identity
-        )
-      }
-
-      case ProgrammeType.GrandeSerie => {
-        val extensions = JsObject(
-          Seq(
-            "persistedQuery" -> JsObject(
-              Seq(
-                "version" -> JsNumber(1),
-                "sha256Hash" -> JsString(
-                  "c09912897e8cd67f8cacc65842a16d65b10829f06cdedfedc50bdeb0acb9989c"
-                )
-              )
-            )
-          )
-        )
-
-        val variables = JsObject(
-          Seq(
-            "params" -> JsObject(
-              Seq(
-                "context" -> JsString("web"),
-                "forceWithoutCueSheet" -> JsBoolean(true),
-                "id" -> JsNumber(programmeId),
-                "pageNumber" -> JsNumber(pageNumber)
-              )
-            )
-          )
-        )
-
-        return Some(
-          Map(
-            "opname" -> "programmeById",
-            "extensions" -> Json.stringify(extensions),
-            "variables" -> Json.stringify(variables)
-          ),
-          identity
+          programTransform
         )
       }
 
@@ -201,6 +129,85 @@ private object Queries {
 }
 
 private def identity[T](x: T): T = x
+
+private given Writes[JsLookupResult] = Writes(_.getOrElse(JsNull))
+
+// Adapts the "program" operation response to the legacy "programmeById" shape.
+// Anything that is not a ProgramPage (e.g. PageError) is returned untouched
+// so that the caller can report it.
+private def programTransform(x: JsValue): JsValue = {
+  val page = x \ "data" \ "program"
+  if ((page \ "typename").asOpt[String] != Some("ProgramPage")) {
+    return x
+  }
+  val program = page \ "program"
+  val canonicalUrl = (program \ "canonicalUrl").asOpt[String].getOrElse("")
+  val typename =
+    if (canonicalUrl.startsWith("/balados/")) "EmissionBalado"
+    else if (canonicalUrl.startsWith("/grandes-series/"))
+      "EmissionGrandesSeries"
+    else "EmissionPremiere"
+
+  val items = (page \ "episodes")
+    .asOpt[JsArray]
+    .map(_.value.toSeq)
+    .getOrElse(Seq.empty)
+    .map { episode =>
+      Json.obj(
+        "typename" -> "ProgrammeContentDetailItem",
+        "broadcastedFirstTimeAt" -> (episode \ "broadcastedFirstTimeAt"),
+        "duration" -> (episode \ "duration"),
+        "isBroadcastedReplay" -> (episode \ "isBroadcastedReplay"),
+        "playlistItemId" -> Json.obj(
+          "mediaId" -> (episode \ "mediaIds" \ 0)
+            .asOpt[JsValue]
+            .collect {
+              case JsNumber(n) => JsString(n.toString)
+              case s: JsString => s
+            }
+            .getOrElse(JsNull),
+          "globalId2" -> Json.obj(
+            "id" -> (episode \ "globalId" \ "id"),
+            "contentType" -> Json.obj(
+              "id" -> (episode \ "globalId" \ "contentType" \ "id")
+            )
+          )
+        ),
+        "summary" -> (episode \ "summary").asOpt[String].getOrElse(""),
+        "title" -> (episode \ "title"),
+        "url" -> (episode \ "url")
+      )
+    }
+
+  val pageSize = (page \ "pagination" \ "pageSize").asOpt[Int].getOrElse(50)
+  Json.obj(
+    "data" -> Json.obj(
+      "programmeById" -> Json.obj(
+        "typename" -> typename,
+        "canonicalUrl" -> canonicalUrl,
+        "header" -> Json.obj(
+          "typename" -> "ProgrammeHeader",
+          "title" -> (program \ "title"),
+          "summary" -> (program \ "summary").asOpt[String].getOrElse(""),
+          "picture" -> Json.obj("pattern" -> (program \ "picture" \ "pattern"))
+        ),
+        "content" -> Json.obj(
+          "typename" -> "ProgrammeContent",
+          "contentDetail" -> Json.obj(
+            "typename" -> "ProgrammeContentDetail",
+            "items" -> items,
+            "pagedConfiguration" -> Json.obj(
+              "pageMaxLength" -> pageSize,
+              "pageNumber" -> (page \ "pagination" \ "pageNumber"),
+              "pageSize" -> pageSize,
+              "totalNumberOfItems" -> (page \ "pagination" \ "totalCount")
+            )
+          )
+        )
+      )
+    )
+  )
+}
 private def audioBookTransform(x: JsValue): JsValue = {
   val patchedItems =
     (x \ "data" \ "audioBookById" \ "content" \ "contentDetail" \ "items")
