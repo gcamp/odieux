@@ -2,6 +2,7 @@ package ca.ligature.ohdieux.ohdio
 
 import scala.concurrent.Future
 import sttp.client4.quick.*
+import sttp.client4.Response
 import play.api.libs.json._
 import ca.ligature.ohdieux.persistence.ProgrammeType
 import ca.ligature.ohdieux.utils.|>
