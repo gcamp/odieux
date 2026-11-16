@@ -40,11 +40,7 @@ case class ApiClient(val baseUrl: String, val userAgent: String) {
     val (queryParams, transform) = queryBuilder.get
     val response =
       try {
-        quickRequest
-          .get(uri"$baseUrl/bff/audio/graphql?$queryParams")
-          .header("User-Agent", userAgent)
-          .header("Content-Type", "application/json")
-          .send()
+        send(uri"$baseUrl/bff/audio/graphql?$queryParams")
       } catch {
         case NonFatal(error) =>
           return FetchFailure(
@@ -103,11 +99,7 @@ case class ApiClient(val baseUrl: String, val userAgent: String) {
     val query =
       Queries.buildGetPlaybackListByGlobalIdQuery(contentTypeId, playbackListId)
 
-    val response = quickRequest
-      .get(uri"$baseUrl/bff/audio/graphql?$query")
-      .header("User-Agent", userAgent)
-      .header("Content-Type", "application/json")
-      .send()
+    val response = send(uri"$baseUrl/bff/audio/graphql?$query")
 
     if (!response.code.isSuccess) {
       return FetchFailure(s"Request failed with ${response.code.code}")
@@ -136,11 +128,7 @@ case class ApiClient(val baseUrl: String, val userAgent: String) {
       "tech" -> tech
     )
 
-    val response = quickRequest
-      .get(uri"$baseUrl/media/validation/v2?$query")
-      .header("User-Agent", userAgent)
-      .header("Content-Type", "application/json")
-      .send()
+    val response = send(uri"$baseUrl/media/validation/v2?$query")
 
     if (!response.code.isSuccess) {
       return FetchFailure(s"Request failed with ${response.code.code}")
@@ -154,4 +142,40 @@ case class ApiClient(val baseUrl: String, val userAgent: String) {
     decoded.map(Success(_)).getOrElse(ParseFailure(_1))
   }
 
+  // Radio-Canada answers bursts with 429 for every request, so space them out and back off.
+  private var lastRequestAt = 0L
+
+  private def send(url: sttp.model.Uri): Response[String] = synchronized {
+    sendWithRetry(url, 0)
+  }
+
+  @scala.annotation.tailrec
+  private def sendWithRetry(url: sttp.model.Uri, attempt: Int): Response[String] = {
+    val wait = lastRequestAt + MinRequestIntervalMs - System.currentTimeMillis()
+    if (wait > 0) Thread.sleep(wait)
+    val response = quickRequest
+      .get(url)
+      .header("User-Agent", userAgent)
+      .header("Content-Type", "application/json")
+      .send()
+    lastRequestAt = System.currentTimeMillis()
+
+    if (response.code.code != 429 || attempt >= RateLimitBackoffsMs.length) {
+      return response
+    }
+    val backoff = response
+      .header("Retry-After")
+      .flatMap(_.toLongOption)
+      .map(_ * 1000)
+      .getOrElse(RateLimitBackoffsMs(attempt))
+    logger.warn(s"Rate limited by Radio-Canada, retrying in ${backoff / 1000}s")
+    Thread.sleep(backoff)
+    sendWithRetry(url, attempt + 1)
+  }
+
+}
+
+object ApiClient {
+  private val MinRequestIntervalMs = 1000L
+  private val RateLimitBackoffsMs = Seq(30_000L, 120_000L, 300_000L)
 }
